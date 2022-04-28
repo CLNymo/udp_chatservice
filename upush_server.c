@@ -7,92 +7,98 @@
 #define MESSAGE_TYPE_MAX 6 // makslengde på meldingstype som er lengden til LOOKUP
 
 int PORT;
-int LOSS_PROBABILITY;
 
-struct sockaddr_in clientaddr;
-struct sockaddr_in serveraddr;
+struct sockaddr_in clientaddr, serveraddr;
 
+// STRUCTS
+typedef struct client {
+  char *nick;
+  struct in_addr* ip;
+  int port;
+  struct client *next;
+};
 
 // METODER
 int check_char(char c);
 void check_error(int res, char *msg);
-void parse_message(char *buf);
+void read_message(char *buf);
 void register_client(char *nick);
 void add_client(char *nick);
 void print_linked_list(struct client *client);
 struct client * lookup_nick(char *nick);
 struct client * lookup_client(struct client *client, char *nick);
+void free_client(struct client *client);
 
-//
-typedef struct client {
-  char *nick;
-  struct sockaddr_in addr;
-  struct client *next;
-};
+
 
 // GLOBALE VARIABLER
 struct client *client_list;
+int sockfd;
+
 
 int main(int argc, char *argv[]) {
+  fd_set fds; // liste over fd'ene til select
+  PORT = atoi(argv[1]);
+  set_loss_probability(atoi(argv[2]));
 
-    PORT = atoi(argv[1]);
-    LOSS_PROBABILITY = atoi(argv[2]);
 
+  // TODO: feilmelding dersom melding er for lang?
 
-    // TODO: feilmelding dersom melding er for lang?
-    char buffer[BUFMAX] = {0};
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  char buffer[BUFMAX] = {0};
+  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
-    if (sockfd == 0) {
-        fprintf(stderr, "Failed to set up socket");
-        exit(EXIT_FAILURE);
-    }
+  if (sockfd == 0) {
+    fprintf(stderr, "Failed to set up socket");
+    exit(EXIT_FAILURE);
+  }
+  memset(&clientaddr, 0, sizeof(clientaddr));
+  memset(&serveraddr, 0, sizeof(serveraddr));
 
-    memset(&clientaddr, 0, sizeof(clientaddr));
-    memset(&serveraddr, 0, sizeof(serveraddr));
+  serveraddr.sin_family = AF_INET;
+  serveraddr.sin_port = htons(PORT);
+  serveraddr.sin_addr.s_addr = INADDR_ANY;
 
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port = htons(PORT);
-    serveraddr.sin_addr.s_addr = INADDR_ANY;
+  int bindval = bind(sockfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
 
-    int bindval = bind(sockfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
+  if (bindval == -1) {
+    fprintf(stderr, "Failed to bind\n");
+    exit(EXIT_FAILURE);
+  }
 
-    if (bindval == -1) {
-        fprintf(stderr, "Failed to bind");
-        exit(EXIT_FAILURE);
-    }
+  socklen_t clientaddr_len = sizeof(struct sockaddr_in);
 
-    socklen_t clientaddr_len = sizeof(struct sockaddr_in);
+  while(1){
 
     recvfrom(
-        sockfd,
-        buffer,
-        BUFMAX,
-        0,
-        (struct sockaddr*)&clientaddr,
-        &clientaddr_len); //Mottar melding fra client, lagrer addressen i clientaddr
+      sockfd,
+      buffer,
+      BUFMAX,
+      0,
+      (struct sockaddr*)&clientaddr,
+      &clientaddr_len); //Mottar melding fra client, lagrer addressen i clientaddr
 
-    printf("Message received: %s\n", buffer); // Se om vi fikk meldingen.
-    parse_message(buffer);
-    printf("Client linked list is currently:\n" );
-    print_linked_list(client_list);
+      printf("Message received: %s\n", buffer); // Se om vi fikk meldingen.
+      read_message(buffer);
+  }
 
-    close(sockfd);
-    return EXIT_SUCCESS;
+  close(sockfd);
+  free_client(client_list);
+  return EXIT_SUCCESS;
 }
 
 /*
 PARSE MELDING FRA CLIENT
 */
 
-void parse_message(char *buffer){
+void read_message(char *buffer){
 
   int sequence_number;
   char message_type[MESSAGE_TYPE_MAX + 1];
   char nick[NICKMAX + 1];
 
-  // TODO: sjekke at hvert inputfelt ikke overstoger avsatt buffer
-  int rc = sscanf(buffer, "PKT %8d %6s %19s\n", &sequence_number, message_type, nick);
+  // TODO: sjekke at hvert inputfelt ikke overstiger avsatt buffer
+
+  int rc = sscanf(buffer, "PKT %8d %6s %20s\n", &sequence_number, message_type, nick);
   if (rc != 3) {
     check_error(-1, "Feil format på melding!");
   }
@@ -102,13 +108,21 @@ void parse_message(char *buffer){
   printf("nick: %s\n", nick);
 
   if(strcmp(message_type, "REG") == 0){
-    printf("message type was REG, see: %s\n", message_type );
     register_client(nick);
-
-
+    // TODO: send ack?
   }
 
-  // TODO: registrer client
+  else if (strcmp(message_type, "LOOKUP") == 0){
+    struct client *client = lookup_nick(nick);
+    if(client != NULL){
+      char return_msg[BUFMAX];
+
+      sprintf(return_msg, "ACK %d NICK %s IP %s PORT %d\n", sequence_number, client->nick, (char *)client->ip, client->port);
+      send_packet(sockfd, buffer, strlen(return_msg), 0, (struct sockaddr*)&clientaddr, sizeof(struct sockaddr_in));
+    }
+  }
+
+
   // TODO: slå opp client
 }
 
@@ -125,7 +139,8 @@ void register_client(char *nick){
 
   else {
         // oppdater socket
-        client->addr = clientaddr;
+        client->ip = &clientaddr.sin_addr;
+        client->port = clientaddr.sin_port;
         printf("client socket updated\n" );
   }
 
@@ -141,8 +156,12 @@ DATASTRUKTUR FOR CLIENT-LISTE OG TILHØRENDE METODER
 // legger client foran i listen
 void add_client(char *nick){
   struct client *client = malloc(sizeof(*client));
-  client->nick = nick;
-  client->addr = clientaddr; // global variabel
+
+  client->nick = malloc(NICKMAX);
+  strcpy(client->nick, nick);
+
+  client->ip = &clientaddr.sin_addr;
+  client->port = clientaddr.sin_port;
   client->next = client_list;
   client_list = client;
   printf("client added to client list\n" );
@@ -151,7 +170,7 @@ void add_client(char *nick){
 
 void print_linked_list(struct client *client){
 
-  printf("%s ", client->nick);
+  printf("client: %s", client->nick);
   while(client->next != NULL){
     printf("->");
     print_linked_list(client->next);
@@ -183,6 +202,23 @@ struct client * lookup_client(struct client *client, char *nick){
     return NULL;
   }
 }
+
+
+// rekursiv free'ing av alle clients
+void free_client(struct client *client){
+  if (client == NULL) {
+    return;
+  }
+  else if (client->next == NULL) {
+    free(client->nick);
+    free(client);
+  }
+  else {
+    free_client(client->next);
+  }
+}
+
+
 
 
 /*

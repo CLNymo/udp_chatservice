@@ -10,7 +10,7 @@ void check_error(int res, char *msg){ // greit å ha siden mange metoder returne
 
 int main()
 {
-  char * hello = "PKT 666 REG Nicolas";
+  char * hello = "PKT 000 LOOKUP Nicolas";
 
   struct sockaddr_in servaddr = {0}; // curly loader på stack men nuller det ut så vi slipper memset
 
