@@ -13,10 +13,22 @@ struct sockaddr_in clientaddr;
 struct sockaddr_in serveraddr;
 
 
-// HJELPEMETODER
+// METODER
 int check_char(char c);
 void check_error(int res, char *msg);
 void parse_message(char *buf);
+void register_client(char *nick);
+void add_client(char *nick);
+void print_linked_list(struct client *client);
+struct client * lookup_nick(char *nick);
+struct client * lookup_client(struct client *client, char *nick);
+
+//
+typedef struct client {
+  char *nick;
+  struct sockaddr_in addr;
+  struct client *next;
+};
 
 // GLOBALE VARIABLER
 struct client *client_list;
@@ -27,7 +39,7 @@ int main(int argc, char *argv[]) {
     LOSS_PROBABILITY = atoi(argv[2]);
 
 
-    // TODO: feilmelding dersom meldign er for lang?
+    // TODO: feilmelding dersom melding er for lang?
     char buffer[BUFMAX] = {0};
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -60,8 +72,10 @@ int main(int argc, char *argv[]) {
         (struct sockaddr*)&clientaddr,
         &clientaddr_len); //Mottar melding fra client, lagrer addressen i clientaddr
 
-    printf("Message received: %s\n", buffer); //Se om vi fikk meldingen.
+    printf("Message received: %s\n", buffer); // Se om vi fikk meldingen.
     parse_message(buffer);
+    printf("Client linked list is currently:\n" );
+    print_linked_list(client_list);
 
     close(sockfd);
     return EXIT_SUCCESS;
@@ -83,9 +97,16 @@ void parse_message(char *buffer){
     check_error(-1, "Feil format på melding!");
   }
 
-  printf("SEQ: %d\n", sequence_number );
-  printf("type: %s\n", message_type );
-  printf("nick: %s\n", nick );
+  printf("SEQ: %d\n", sequence_number);
+  printf("type: %s\n", message_type);
+  printf("nick: %s\n", nick);
+
+  if(strcmp(message_type, "REG") == 0){
+    printf("message type was REG, see: %s\n", message_type );
+    register_client(nick);
+
+
+  }
 
   // TODO: registrer client
   // TODO: slå opp client
@@ -96,37 +117,71 @@ REGISTRERING AV CLIENT
 */
 
 void register_client(char *nick){
-  // TODO: sjekk om bruker finnes fra før
-  // TODO: legg til i lenkeliste
-  // TOCO: send ACK
+  struct client *client = lookup_nick(nick);
+  if (client == NULL){
+    add_client(nick);
+
+  }
+
+  else {
+        // oppdater socket
+        client->addr = clientaddr;
+        printf("client socket updated\n" );
+  }
+
+  // TODO: send ACK
 }
 
 
 /*
-DATASTRUKTUR FOR CLIENT-LISTE
+DATASTRUKTUR FOR CLIENT-LISTE OG TILHØRENDE METODER
 */
 
-typedef struct client { // client-struct for enkel-lenket lenkeliste
-  char *nick;
-  struct sockaddr_in addr;
-  struct client *next;
-};
 
-void add_client(char *nick){ // legger client foran i listen
-  struct client *client = malloc(sizeof(client));
+// legger client foran i listen
+void add_client(char *nick){
+  struct client *client = malloc(sizeof(*client));
   client->nick = nick;
   client->addr = clientaddr; // global variabel
   client->next = client_list;
   client_list = client;
+  printf("client added to client list\n" );
 }
 
-void print_linked_list(){
-  struct client *client = client_list;
 
+void print_linked_list(struct client *client){
+
+  printf("%s ", client->nick);
   while(client->next != NULL){
-    printf("%s -> ", client->nick);
+    printf("->");
+    print_linked_list(client->next);
   }
-  fflush(stdout);
+  printf("\n");
+}
+
+// itererer lenkeliste. Returnerer client hvis nick finnes, ellers null
+struct client * lookup_nick(char *nick){
+
+  struct client *client = client_list;
+  if (client == NULL) {
+    return NULL;
+  }
+  else if (client->nick == nick){
+    return client;
+  }
+  else if(client->next == NULL){
+    return NULL;
+  }
+  return lookup_client(client->next, nick);
+}
+
+struct client * lookup_client(struct client *client, char *nick){
+  if (client->nick == nick){
+    return client;
+  }
+  else {
+    return NULL;
+  }
 }
 
 
@@ -136,7 +191,7 @@ HJELPEMETODER
 
 int check_char(char c){
   if (!isalpha(c) && !isalnum(c) && !isspace(c)) {
-    printf("illegal character is: %s\n", c);
+    printf("illegal character is: %c\n", c);
     check_error(-1, "illegal character received");
     return -1;
   }
