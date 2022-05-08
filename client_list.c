@@ -19,7 +19,7 @@ DATASTRUKTUR FOR CLIENT-LISTE OG TILHØRENDE METODER
 
 
 // legger client foran i listen
-struct client * add_client(struct client *client_list, char *nick, int port, in_addr_t ip_string){
+struct client * add_client(struct client *client_list, char *nick, int port, in_addr_t ip){
   struct client *client = malloc(sizeof(struct client));
 
   // lagrer nick
@@ -29,8 +29,8 @@ struct client * add_client(struct client *client_list, char *nick, int port, in_
   // lagrer sockaddr
   client->sockaddr = malloc(sizeof(struct sockaddr_in));
   client->sockaddr->sin_family = AF_INET;
-  client->sockaddr->sin_port = htons(port);
-  client->sockaddr->sin_addr.s_addr = ip_string;
+  client->sockaddr->sin_port = port;
+  client->sockaddr->sin_addr.s_addr = ip;
   //inet_pton(AF_INET, ip_string, &client->sockaddr->sin_addr.s_addr);
 
   // legger client foran i lenkelisten

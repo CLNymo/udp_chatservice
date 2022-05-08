@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
   socklen_t clientaddr_len = sizeof(struct sockaddr_in);
 
-  while(1){ // serveren venter evig
+  while(1){ // serveren venter evig, som definert i oppgaven
     int rc = recvfrom(
       sockfd,
       buffer,
@@ -126,7 +126,9 @@ void read_message(char *msg){
     // oppslag godkjent
     if(client != NULL){
       char ip_string[16];
-      inet_ntop(AF_INET, &client->sockaddr->sin_addr, ip_string, sizeof(ip_string));
+      rc = inet_ntop(AF_INET, &client->sockaddr->sin_addr, ip_string, sizeof(ip_string));
+      check_error(rc, "inet_pton failed");
+
       sprintf(ack, "ACK %d NICK %s IP %s PORT %d", sequence_number, client->nick, ip_string, client->sockaddr->sin_port);
       printf("nick found, ack is: %s\n", ack);
     }
@@ -151,7 +153,7 @@ void register_client(char *nick){
     struct client *client = lookup_client(client_list, nick);
     if (client == NULL){
       client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
-      printf("Client %s fantes ikke fra før \n", nick );
+      printf("%s port is: %d\n", nick, clientaddr.sin_port);
       print_linked_list(client_list);
     }
     else {
