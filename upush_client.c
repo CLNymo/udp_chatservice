@@ -9,7 +9,7 @@
 void check_error(int res, char *msg);
 void get_string(char str[], int size);
 void send_REG_to_server(int sockfd);
-struct client * lookup_client_in_server(int sequence_number, char *nick, int sockfd, fd_set fds, int timeout);
+int lookup_client_in_server(int sequence_number, char *nick, int sockfd, fd_set fds, int timeout);
 
 // GLOBALE VARIABLER
 struct client * known_clients;  // cache med kjente klienter. lenkeliste.
@@ -145,24 +145,26 @@ int main(int argc, char *argv[]){
       struct client *to_client = lookup_client(known_clients, to_nick);
 
       if(to_client == NULL){
-        to_client = lookup_client_in_server(sequence_number, to_nick, sockfd, fds, atoi(argv[4]));
+        rc = lookup_client_in_server(sequence_number, to_nick, sockfd, fds, atoi(argv[4]));
       }
 
-      if(to_client == NULL){
-        // dersom feil skyldes NOT FOUND:
-        // ack_fail[SERVER_MSG_MAX];
-        // sprintf(ack_fail, "ACK %d NOT FOUND", sequence_number);
-        // strcmp
+      // Hvis lookup i server returnerte NOT FOUND
+      if(rc == -1){
+        printf("Your friend %s doesn't exist on the server\n", to_nick);
+        continue;
+      }
 
-        // dersom feil skyldes mangel på respons fra server:
-        // utfører QUIT-prosedyre
-        printf("Your friend %s doesn't exist :(\n", to_nick);
+      // Hvis server ikke svarte på lookup
+      else if (rc == -2) {
+        printf("No response from server: quitting program.\n" );
         break;
       }
+
+      // Hvis lookup i server var OK
       else {
-        rc = send_packet(sockfd, text, strlen(text), 0, (struct sockaddr *)to_client->sockaddr, sizeof(struct sockaddr));
+        rc = send_packet(sockfd, text, strlen(text), 0, (struct sockaddr *)known_clients->sockaddr, sizeof(struct sockaddr));
         check_error(rc, "failed to send message");
-        printf("packet sent to %s on addr %d port %d\n", to_client->nick, to_client->sockaddr->sin_addr.s_addr, to_client->sockaddr->sin_port);
+        printf("packet sent to %s on addr %d port %d\n", known_clients->nick, known_clients->sockaddr->sin_addr.s_addr, known_clients->sockaddr->sin_port);
       }
 
 
@@ -170,7 +172,7 @@ int main(int argc, char *argv[]){
       rc = read(sockfd, rcv_msg, MSG_MAX - 1);
       check_error(rc, "read");
       rcv_msg[rc] = '\0';
-      printf("\rMotatt melding:%s\n", rcv_msg);
+      printf("\rMotatt melding: %s\n", rcv_msg);
     }
   }
 
@@ -182,7 +184,7 @@ int main(int argc, char *argv[]){
   return 0;
 }
 
-struct client * lookup_client_in_server(int sequence_number, char *nick, int sockfd, fd_set fds, int timeout_seconds){
+int lookup_client_in_server(int sequence_number, char *nick, int sockfd, fd_set fds, int timeout_seconds){
   char lookup_msg[SERVER_MSG_MAX], lookup_response[SERVER_MSG_MAX], ack_nick[NICKMAX], ack_ip_s[16], ack_fail[SERVER_MSG_MAX];
   int ack_seq, ack_port, rc, tries, select_timer;
   in_addr_t ack_ip;
@@ -223,12 +225,12 @@ struct client * lookup_client_in_server(int sequence_number, char *nick, int soc
       // Sjekker om respons var en feilmelding:
       if(strcmp(lookup_response, ack_fail) == 0){
         fprintf(stderr, "NICK %s NOT REGISTERED\n", nick);
-        return NULL;
+        return -1;
 
-      // Respons var bra, legger til client i known_clients:
+      // Respons var bra, legger til client foran i known_clients:
       } else {
         known_clients = add_client(known_clients, nick, ack_port, inet_addr(ack_ip_s));
-        return known_clients;
+        return 0;
       }
     }
 
@@ -239,7 +241,7 @@ struct client * lookup_client_in_server(int sequence_number, char *nick, int soc
 
       if(tries >= 3){ // vi gir opp
         fprintf(stderr, "Lookup failed: no response from server\n" );
-        break;
+        return -2;
 
       } else { // vi prøver igjen
         printf("prøver igjen!\n");
@@ -248,11 +250,10 @@ struct client * lookup_client_in_server(int sequence_number, char *nick, int soc
     }
 
     // Sjekk dersom en pakke blir ødelagt på veien, men fortsatt leveres
-    if(rc != 4){
-      fprintf(stderr, "Received wrong format on lookup response: %s\n", lookup_response);
-    }
+    // if(rc != 4){
+    //   fprintf(stderr, "Received wrong format on lookup response: %s\n", lookup_response);
+    // }
   }
-  return NULL;
 }
 
 
