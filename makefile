@@ -4,13 +4,17 @@ VALGRIND =  valgrind --track-origins=yes --track-fds=yes --malloc-fill=0x40 --fr
 
 all: server client send_packet
 
-server: upush_server.c send_packet.c 
+server: upush_server.c send_packet.c
 	gcc $(FLAGS) upush_server.c send_packet.c -o upush_server
 	$(VALGRIND) ./upush_server 12345 0
 
-client: upush_client.c
-	gcc $(FLAGS) upush_client.c -o upush_client
-	$(VALGRIND) ./upush_client
+client1: upush_client.c send_packet.c
+	gcc $(FLAGS) upush_client.c send_packet.c -o upush_client
+	$(VALGRIND) ./upush_client kukfaen 127.0.0.1 12345 5 0
+
+client2: upush_client.c send_packet.c
+	gcc $(FLAGS) upush_client.c send_packet.c -o upush_client
+	$(VALGRIND) ./upush_client ost 127.0.0.1 12345 5 0
 
 
 
