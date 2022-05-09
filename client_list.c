@@ -31,7 +31,6 @@ struct client * add_client(struct client *client_list, char *nick, int port, in_
   client->sockaddr->sin_family = AF_INET;
   client->sockaddr->sin_port = port;
   client->sockaddr->sin_addr.s_addr = ip;
-  //inet_pton(AF_INET, ip_string, &client->sockaddr->sin_addr.s_addr);
 
   // legger client foran i lenkelisten
   client->next = client_list;

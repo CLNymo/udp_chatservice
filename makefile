@@ -10,7 +10,7 @@ server: upush_server.c send_packet.c
 
 client1: upush_client.c send_packet.c
 	gcc $(FLAGS) upush_client.c send_packet.c -o upush_client
-	$(VALGRIND) ./upush_client kukfaen 127.0.0.1 12345 5 0
+	$(VALGRIND) ./upush_client kuk 127.0.0.1 12345 5 0
 
 client2: upush_client.c send_packet.c
 	gcc $(FLAGS) upush_client.c send_packet.c -o upush_client

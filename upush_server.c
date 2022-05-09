@@ -37,7 +37,9 @@ int main(int argc, char *argv[]) {
   }
 
   PORT = atoi(argv[1]);
-  set_loss_probability(atoi(argv[2]));
+
+  srand48(time(NULL));
+  set_loss_probability(atof(argv[2])/100);
   char buffer[BUFMAX] = {0};
 
 
@@ -65,7 +67,8 @@ int main(int argc, char *argv[]) {
       BUFMAX,
       0,
       (struct sockaddr*)&clientaddr,
-      &clientaddr_len); //Mottar melding fra client, lagrer socket i clientaddr
+      &clientaddr_len
+    );
 
 
     buffer[rc] = '\0';
@@ -87,6 +90,7 @@ void read_message(char *msg){
   int sequence_number;
   char message_type[MESSAGE_TYPE_MAX + 1];
   char nick[NICKMAX + 1];
+  char ack[BUFMAX];
 
 
   // TODO: sjekke at hvert inputfelt ikke overstiger avsatt buffer. Trenger vi tallene for width?
@@ -98,7 +102,6 @@ void read_message(char *msg){
     return;
   }
 
-  // TODO: trengs disse?
   message_type[strlen(message_type)] ='\0';
   nick[strlen(nick)] = '\0';
 
@@ -107,21 +110,18 @@ void read_message(char *msg){
   printf("nick: %s\n", nick);
 
 
-
-
   // REGISTRERINGS-MELDING
   if(strcmp(message_type, "REG") == 0){
     register_client(nick);
-    // ACK
-    char ack[BUFMAX];
+
+    // Formattere ACK
     sprintf(ack, "ACK %d OK", sequence_number);
-    send_packet(sockfd, ack, strlen(ack), 0, (struct sockaddr*)&clientaddr, sizeof(struct sockaddr_in));
+
   }
 
   // LOOKUP-MELDING
   else if (strcmp(message_type, "LOOKUP") == 0){
     struct client *client = lookup_client(client_list, nick);
-    char ack[BUFMAX];
 
     // oppslag godkjent
     if(client != NULL){
@@ -129,40 +129,39 @@ void read_message(char *msg){
       rc = inet_ntop(AF_INET, &client->sockaddr->sin_addr, ip_string, sizeof(ip_string));
       check_error(rc, "inet_pton failed");
 
+      // Formattere ack
       sprintf(ack, "ACK %d NICK %s IP %s PORT %d", sequence_number, client->nick, ip_string, client->sockaddr->sin_port);
       printf("nick found, ack is: %s\n", ack);
     }
-    // oppslag feilet
+
+    // Oppslag feilet
     else {
+      // Formattere ack
       sprintf(ack, "ACK %d NOT FOUND", sequence_number);
       printf("nick not found, ack is: %s\n", ack );
     }
-    // send ACK
-    send_packet(sockfd, ack, strlen(ack), 0, (struct sockaddr*)&clientaddr, sizeof(struct sockaddr_in));
-    printf("sent response to client: %s\n", ack);
   }
 
+  // send ACK
+  send_packet(sockfd, ack, strlen(ack), 0, (struct sockaddr*)&clientaddr, sizeof(struct sockaddr_in));
+  printf("sent response to client: %s\n", ack);
 }
 
 // legger til ny client, oppdaterer info hvis client finnes allerede
 void register_client(char *nick){
-  // if (client_list == NULL) {
-  //   client_list = add_client(client_list, nick, &clientaddr);
-  // }
-  //else {
-    struct client *client = lookup_client(client_list, nick);
-    if (client == NULL){
-      client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
-      printf("%s port is: %d\n", nick, clientaddr.sin_port);
-      print_linked_list(client_list);
-    }
-    else {
-      // oppdater socket
-      client->sockaddr = &clientaddr;
-      printf("client socket updated\n");
-    }
-  //}
 
+  struct client *client = lookup_client(client_list, nick);
+  if (client == NULL){
+    client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
+    printf("%s port is: %d\n", nick, clientaddr.sin_port);
+    print_linked_list(client_list);
+  }
+  else {
+    // oppdater socket
+    client->sockaddr->sin_port = clientaddr.sin_port;
+    client->sockaddr->sin_addr.s_addr = clientaddr.sin_addr.s_addr;
+    printf("client socket updated\n");
+  }
 }
 
 
