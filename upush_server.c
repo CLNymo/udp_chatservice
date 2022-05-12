@@ -112,11 +112,12 @@ void read_message(char *msg){
 
   // REGISTRERINGS-MELDING
   if(strcmp(message_type, "REG") == 0){
-    register_client(nick);
+
+    // Registrerer eller oppdaterer client i client_list
+    client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
 
     // Formattere ACK
     sprintf(ack, "ACK %d OK", sequence_number);
-
   }
 
   // LOOKUP-MELDING
@@ -125,9 +126,10 @@ void read_message(char *msg){
 
     // oppslag godkjent
     if(client != NULL){
-      char ip_string[16];
-      rc = inet_ntop(AF_INET, &client->sockaddr->sin_addr, ip_string, sizeof(ip_string));
-      check_error(rc, "inet_pton failed");
+      char *ip_string = inet_ntoa(client->sockaddr->sin_addr);
+      // rc = inet_ntop(AF_INET, &client->sockaddr->sin_addr.s_addr, ip_string );
+      // check_error(rc, "Error doing inet_pton");
+      // TODO: error sjekke inet? men den returnerer ikke int. Kanskje
 
       // Formattere ack
       sprintf(ack, "ACK %d NICK %s IP %s PORT %d", sequence_number, client->nick, ip_string, client->sockaddr->sin_port);
@@ -148,21 +150,21 @@ void read_message(char *msg){
 }
 
 // legger til ny client, oppdaterer info hvis client finnes allerede
-void register_client(char *nick){
-
-  struct client *client = lookup_client(client_list, nick);
-  if (client == NULL){
-    client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
-    printf("%s port is: %d\n", nick, clientaddr.sin_port);
-    print_linked_list(client_list);
-  }
-  else {
-    // oppdater socket
-    client->sockaddr->sin_port = clientaddr.sin_port;
-    client->sockaddr->sin_addr.s_addr = clientaddr.sin_addr.s_addr;
-    printf("client socket updated\n");
-  }
-}
+// void register_client(char *nick){
+//
+//   struct client *client = lookup_client(client_list, nick);
+//   if (client == NULL){
+//     client_list = add_client(client_list, nick, clientaddr.sin_port, clientaddr.sin_addr.s_addr);
+//     printf("%s port is: %d\n", nick, clientaddr.sin_port);
+//     print_linked_list(client_list);
+//   }
+//   else {
+//     // oppdater socket
+//     client->sockaddr->sin_port = clientaddr.sin_port;
+//     client->sockaddr->sin_addr.s_addr = clientaddr.sin_addr.s_addr;
+//     printf("client socket updated\n");
+//   }
+// }
 
 
 
